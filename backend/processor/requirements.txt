@@ -1,0 +1,35 @@
+# Core Web API
+fastapi
+uvicorn[standard]
+python-multipart
+
+# AI & VLM
+google-generativeai
+python-dotenv
+
+# Computer Vision & Logic
+opencv-python
+numpy
+requests
+rembg[gpu]
+torch
+torchvision
+pycolmap
+kapture
+kapture-localization
+
+# Utils
+typing-extensions
+argparse
+roma
+tqdm
+trimesh
+scipy
+scikit-learn
+gradio
+matplotlib
+einops
+tensorboard
+pyglet<2
+huggingface-hub[torch]>=0.22
+pillow-heif

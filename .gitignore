@@ -1,0 +1,75 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+backend/api/.env
+backend/api/.env.local
+backend/processor/.env
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/.dart_tool/
+**.flutter-plugins-dependencies
+**.pub-cache/
+**.pub/
+**/build/
+**/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+**/android/app/debug
+**/android/app/profile
+**/android/app/release
+
+# Node / Backend
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+backend/api/dist/
+
+# Python / AI
+**/venv/
+**/__pycache__/
+*.pth
+pipeline/deps/
+pipeline/mast3r_cache/
+pipeline/gs_dataset/
+
+# Storage
+storage/uploads/
+storage/outputs/
+
+# Secrets
+firebase-service-account.json
+*.json.example
+.env*
+! .env.example
+*.ply
