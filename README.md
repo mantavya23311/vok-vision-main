@@ -32,66 +32,74 @@ This engine is optimized for Windows 10/11 with NVIDIA hardware. Follow these st
 - **Git**: Install Git for Windows.
 - **Redis**: BullMQ requires Redis. For Windows, install [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install) and run Redis inside it, or use [Memurai](https://www.memurai.com/) as a native Windows alternative.
 
-### 3. Backend API Setup (Node.js)
+---
+
+## Network and IP Configuration
+
+For the Mobile App to communicate with your Windows laptop, both devices must be on the same Wi-Fi network. You must also update the local IP address in several files.
+
+### 1. Identify Your IP Address
+Open Command Prompt on Windows and run:
 ```powershell
-# Navigate to the API directory
-cd backend/api
+ipconfig
+```
+Look for "IPv4 Address" under your Wireless LAN adapter (e.g., 192.168.1.15).
 
-# Install dependencies
-npm install
-
-# Setup environment variables
-copy .env.example .env
-# Edit .env and add your MongoDB URL and Firebase credentials
+### 2. Update Backend Settings
+In `backend/api/.env`, update the `LOCAL_IP` variable:
+```env
+LOCAL_IP=192.168.x.x
 ```
 
-### 4. AI Processor Setup (Python)
+### 3. Update AI Processor Settings
+In `backend/processor/config.py`, update the fallback IP or use the `.env` file:
+```python
+BACKEND_URL = os.getenv("BACKEND_URL", "http://192.168.x.x:3000/api/v1")
+```
+
+### 4. Update Mobile App Settings
+You must update the IP address in two repository files in the Flutter project:
+- `apps/mobile_app/lib/src/features/authentication/data/auth_repository.dart`
+- `apps/mobile_app/lib/src/features/reconstruction/data/project_repository.dart`
+
+Replace `192.168.200.84` with your laptop's actual IP address.
+
+---
+
+## Installation Steps
+
+### 1. Backend API Setup (Node.js)
 ```powershell
-# Navigate to the processor directory
+cd backend/api
+npm install
+copy .env.example .env
+# Edit .env and add your MONGODB_URI and LOCAL_IP
+```
+
+### 2. AI Processor Setup (Python)
+```powershell
 cd backend/processor
-
-# Create a virtual environment
 python -m venv venv
-
-# Activate the virtual environment
 .\venv\Scripts\activate
-
-# Install PyTorch with CUDA support
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-
-# Install remaining requirements
 pip install -r requirements.txt
-
-# Setup environment variables
 copy .env.example .env
 # Add your Gemini API Key and Backend URL
 ```
 
-### 5. Mobile App Setup (Flutter)
-- Install the [Flutter SDK](https://docs.flutter.dev/get-started/install/windows).
-- Run `flutter doctor` to ensure all dependencies are met.
-- Connect your Android device or start an emulator.
+### 3. Mobile App Setup (Flutter)
 ```powershell
 cd apps/mobile_app
 flutter pub get
+# Ensure your IP is updated in the repository files mentioned above
 flutter run
 ```
 
-### 6. Execution Flow
-To run the full system on Windows, open three separate terminal windows:
-
-1.  **Terminal 1 (Redis)**: Ensure your Redis server is running (`redis-server`).
-2.  **Terminal 2 (API)**: 
-    ```powershell
-    cd backend/api
-    npm run dev
-    ```
-3.  **Terminal 3 (Processor)**:
-    ```powershell
-    cd backend/processor
-    .\venv\Scripts\activate
-    python main.py
-    ```
+### 4. Execution Flow
+Run these in separate terminals:
+1.  **Terminal 1**: `redis-server`
+2.  **Terminal 2**: `cd backend/api && npm run dev`
+3.  **Terminal 3**: `cd backend/processor && .\venv\Scripts\activate && python main.py`
 
 ---
 
@@ -110,7 +118,6 @@ VokVision/
 
 The MASt3R model checkpoint (`MASt3R_ViTLarge_BaseDecoder_512_catmlpdpt_metric.pth`) is required.
 - It will automatically download on the first run.
-- For manual placement, put it in `pipeline/mast3r/`.
 
 ---
 
