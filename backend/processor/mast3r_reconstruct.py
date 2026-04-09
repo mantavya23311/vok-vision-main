@@ -28,40 +28,47 @@ def main():
     parser.add_argument("--input_dir", required=True, help="Directory containing images")
     parser.add_argument("--output_dir", required=True, help="Directory for SfM output")
     parser.add_argument("--mask_dir", default=None, help="Optional directory for segmentation masks to filter points")
+    # ✅ ADD THESE (CRITICAL FIX)
+    parser.add_argument("--image_size", type=int, default=512)
+    parser.add_argument("--iterations", type=int, default=2500)
     
     args = parser.parse_args()
     
-    device = args.device
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     if device == "mps" and not torch.backends.mps.is_available():
         device = "cpu"
         
     print(f"🚀 Initializing MASt3R SfM on {device}...")
     
-    # 1. Load Images & Optional Masks
-    filelist = sorted([str(p) for p in Path(args.input_dir).glob("*.[jJ][pP][gG]")])
+    filelist = []
+
+    for ext in ["*.jpg", "*.jpeg", "*.png", "*.JPG", "*.JPEG", "*.PNG"]:
+        filelist.extend([str(p) for p in Path(args.input_dir).glob(ext)])
+
+    filelist = sorted(filelist)
+
+    print(f"📸 Found {len(filelist)} images in {args.input_dir}")
+
     if not filelist:
-         filelist = sorted([str(p) for p in Path(args.input_dir).glob("*.[pP][nN][gG]")])
-         
-    if not filelist:
-        print(f" No images found in {args.input_dir}")
+        print(f"❌ No images found in {args.input_dir}")
+        print("📂 Directory contents:", os.listdir(args.input_dir))
         sys.exit(1)
-        
-    print(f"📸 Found {len(filelist)} images.")
+            
+        print(f"📸 Found {len(filelist)} images.")
     imgs = load_images(filelist, size=args.image_size)
-    
-    # Pre-load masks if provided
-    masks = []
+    TARGET_SIZE=args.image_size
+    # Pre-load masks if provided, otherwise fill with None for each image
+    masks = [None] * len(filelist)
     if args.mask_dir:
         from PIL import Image
-        for path in filelist:
+        for idx, path in enumerate(filelist):
             mask_path = os.path.join(args.mask_dir, os.path.basename(path))
             if os.path.exists(mask_path):
                 # Load mask, resize to match MASt3R processing size, and convert to binary
-                m = Image.open(mask_path).convert('L').resize((args.image_size, args.image_size))
+                m = Image.open(mask_path).convert('L')
+                m = m.resize((TARGET_SIZE, TARGET_SIZE))
                 # For segmented images (white background), pixels < 250 are likely the object
-                masks.append(np.array(m) < 250) 
-            else:
-                masks.append(None)
+                masks[idx] = np.array(m) < 250
 
     # 2. Load Model
     # Note: Using small model for first pass if needed, but the user expects premium results.
@@ -98,15 +105,30 @@ def main():
     colmap_dir = os.path.join(dataset_dir, "sparse/0")
     os.makedirs(colmap_dir, exist_ok=True)
     
-    # Create images symlink (Crucial: Training images are the segmented ones!)
-    images_link = os.path.join(dataset_dir, "images")
-    training_images = args.mask_dir if args.mask_dir else args.input_dir
-    if not os.path.exists(images_link):
-        try:
-            os.symlink(training_images, images_link)
-        except:
-            import shutil
-            shutil.copytree(training_images, images_link)
+    # CHANGE: Replaced unreliable symlink with a direct file copy.
+    # The original os.symlink() + shutil.copytree() fallback caused OpenSplat
+    # to fail with "Cannot read" errors — symlinks are not reliably followed
+    # across containerised or networked filesystems at OpenSplat runtime.
+    # We now always hard-copy only the images actually used in reconstruction
+    # (filelist), so OpenSplat finds exactly the right files with no broken paths.
+    import shutil as _shutil
+    images_dir = os.path.join(dataset_dir, "images")
+
+    # Remove any stale symlink or directory left from a previous run
+    if os.path.islink(images_dir):
+        os.remove(images_dir)          # CHANGE: drop broken symlink before copying
+    elif os.path.isdir(images_dir):
+        _shutil.rmtree(images_dir)
+
+    os.makedirs(images_dir, exist_ok=True)
+
+    # CHANGE: Copy only the processed images (filelist), keeping original
+    # filenames so the references written into images.txt remain valid.
+    for src_path in filelist:
+        dst_path = os.path.join(images_dir, Path(src_path).name)
+        _shutil.copy2(src_path, dst_path)
+
+    print(f"📁 Copied {len(filelist)} images to {images_dir}")
 
     print(f"💾 Exporting COLMAP format to {colmap_dir}...")
     
@@ -136,11 +158,23 @@ def main():
         point_id = 1
         for i, (pts, conf) in enumerate(zip(pts3d, confs)):
             # Use medium-high confidence points for dense initialization
-            mask_conf = conf.ravel() > 1.0
+            mask_conf = conf.ravel() > 0.5
             
             # Apply optional segmentation mask to pts
             if masks[i] is not None:
-                mask_seg = masks[i].ravel()
+                mask_seg = masks[i]
+                # ✅ Resize mask to match conf shape
+                if mask_seg.shape != conf.shape:
+                    from PIL import Image
+
+                    h, w = conf.shape
+                    mask_img = Image.fromarray(mask_seg.astype("uint8") * 255)
+                    mask_img = mask_img.resize((w, h), Image.NEAREST)
+
+                    mask_seg = np.array(mask_img) > 0
+
+                mask_seg = mask_seg.ravel()
+
                 final_mask = mask_conf & mask_seg
             else:
                 final_mask = mask_conf
@@ -155,6 +189,9 @@ def main():
             img = (img * 255).astype(np.uint8)
             
             # Extract true colors matching the valid points
+            flat_img = img.reshape(-1, 3)
+            flat_mask = final_mask[:len(flat_img)]
+            colors = flat_img[flat_mask]
             colors = img.reshape(-1, 3)[final_mask]
             
             # Subsample for initialization (keep more for better quality)
